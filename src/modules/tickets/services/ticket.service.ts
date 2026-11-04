@@ -193,26 +193,24 @@ export const ticketService = {
 
     try {
       // 1. Notify the requester that their ticket was registered
+      const targetRequesterId = ticket.requesterId || actor.id;
       await notificationService.create({
-        userId: actor.id,
+        userId: targetRequesterId,
         title: 'Ticket Raised Successfully',
         message: `Your ticket #${ticket.ticketNumber} has been registered.`,
         type: 'ticket_created',
         link: '/tickets',
       });
 
-      // 2. Notify Admins and Support Agents about the newly logged ticket
-      const staffMembers = await userRepository.findStaffUsers();
-      for (const staff of staffMembers) {
-        if (staff.id !== actor.id) {
-          await notificationService.create({
-            userId: staff.id,
-            title: 'New Ticket Logged',
-            message: `Ticket #${ticket.ticketNumber} (${ticket.title}) was raised by ${user?.name || actorName}.`,
-            type: 'ticket_created',
-            link: '/tickets',
-          });
-        }
+      // 2. If an agent is assigned on creation, notify ONLY that assigned agent
+      if (ticket.assignedToId && ticket.assignedToId !== actor.id) {
+        await notificationService.create({
+          userId: ticket.assignedToId,
+          title: 'New Ticket Assigned',
+          message: `You have been assigned ticket #${ticket.ticketNumber} (${ticket.title}).`,
+          type: 'ticket_assigned',
+          link: '/tickets',
+        });
       }
     } catch (e) {
       console.error('Failed to send notification on ticket create:', e);
@@ -331,21 +329,44 @@ export const ticketService = {
 
         try {
       if (input.status === 'resolved') {
-        await notificationService.create({
-          userId: ticket.requesterId,
-          title: 'Ticket Resolved',
-          message: `Ticket #${ticket.ticketNumber} has been resolved by ${actorName}.`,
-          type: 'ticket_resolved',
-          link: '/tickets',
-        });
+        if (ticket.requesterId && ticket.requesterId !== actor.id) {
+          await notificationService.create({
+            userId: ticket.requesterId,
+            title: 'Ticket Resolved',
+            message: `Ticket #${ticket.ticketNumber} has been resolved by ${actorName}.`,
+            type: 'ticket_resolved',
+            link: '/tickets',
+          });
+        }
       } else if (input.status === 'closed') {
         const targetUserId = actor.id === ticket.requesterId ? ticket.assignedToId : ticket.requesterId;
-        if (targetUserId) {
+        if (targetUserId && targetUserId !== actor.id) {
           await notificationService.create({
             userId: targetUserId,
             title: 'Ticket Closed',
             message: `Ticket #${ticket.ticketNumber} has been closed by ${actorName}.`,
             type: 'ticket_closed',
+            link: '/tickets',
+          });
+        }
+      } else if (input.status === 'in_progress') {
+        if (ticket.requesterId && ticket.requesterId !== actor.id) {
+          await notificationService.create({
+            userId: ticket.requesterId,
+            title: 'Ticket In Progress',
+            message: `Work on ticket #${ticket.ticketNumber} has been initiated by ${actorName}.`,
+            type: 'ticket_updated',
+            link: '/tickets',
+          });
+        }
+      } else if (input.status === 'reopened') {
+        const targetUserId = actor.id === ticket.requesterId ? ticket.assignedToId : ticket.requesterId;
+        if (targetUserId && targetUserId !== actor.id) {
+          await notificationService.create({
+            userId: targetUserId,
+            title: 'Ticket Reopened',
+            message: `Ticket #${ticket.ticketNumber} has been reopened by ${actorName}.`,
+            type: 'ticket_updated',
             link: '/tickets',
           });
         }
@@ -450,30 +471,36 @@ export const ticketService = {
         try {
       if (input.assignedToId && assignee) {
         if (input.assignedToId === actor.id) {
-          // Self-claim: notify requester
-          await notificationService.create({
-            userId: ticket.requesterId,
-            title: 'Support Agent Assigned',
-            message: `${actorName} claimed your ticket #${ticket.ticketNumber} and is currently resolving it.`,
-            type: 'ticket_assigned',
-            link: '/tickets',
-          });
+          // Self-claim: notify requester ONLY (if requester is not the actor)
+          if (ticket.requesterId && ticket.requesterId !== actor.id) {
+            await notificationService.create({
+              userId: ticket.requesterId,
+              title: 'Support Agent Assigned',
+              message: `${actorName} claimed your ticket #${ticket.ticketNumber} and is currently resolving it.`,
+              type: 'ticket_assigned',
+              link: '/tickets',
+            });
+          }
         } else {
-          // Admin assignment: notify assignee agent & requester
-          await notificationService.create({
-            userId: assignee.id,
-            title: 'New Ticket Assigned',
-            message: `You have been assigned ticket #${ticket.ticketNumber} (${ticket.title}).`,
-            type: 'ticket_assigned',
-            link: '/tickets',
-          });
-          await notificationService.create({
-            userId: ticket.requesterId,
-            title: 'Support Agent Assigned',
-            message: `Ticket #${ticket.ticketNumber} has been assigned to ${assignee.name}.`,
-            type: 'ticket_assigned',
-            link: '/tickets',
-          });
+          // Direct assignment: notify the assigned agent & ticket requester ONLY
+          if (assignee.id !== actor.id) {
+            await notificationService.create({
+              userId: assignee.id,
+              title: 'New Ticket Assigned',
+              message: `You have been assigned ticket #${ticket.ticketNumber} (${ticket.title}).`,
+              type: 'ticket_assigned',
+              link: '/tickets',
+            });
+          }
+          if (ticket.requesterId && ticket.requesterId !== actor.id && ticket.requesterId !== assignee.id) {
+            await notificationService.create({
+              userId: ticket.requesterId,
+              title: 'Support Agent Assigned',
+              message: `Ticket #${ticket.ticketNumber} has been assigned to ${assignee.name}.`,
+              type: 'ticket_assigned',
+              link: '/tickets',
+            });
+          }
         }
       }
     } catch (e) {

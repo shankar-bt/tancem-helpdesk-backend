@@ -126,8 +126,9 @@ export const roleService = {
   },
 
   async getUserPermissions(userId: string, role?: string): Promise<string[]> {
-    // Super admins always have full access
-    if (role === 'admin') {
+    // Super admins and administrators always have full access to all permissions
+    const r = (role || '').toLowerCase();
+    if (r === 'admin' || r === 'super_admin' || r === 'superadmin' || r === 'administrator' || r.includes('admin')) {
       const all = await permissionRepository.list();
       return all.map((p) => p.slug);
     }
