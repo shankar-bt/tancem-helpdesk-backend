@@ -55,6 +55,27 @@ const PERMISSION_ALIAS_MAP: Record<string, string[]> = {
 
 function checkPermissionMatch(userPermissions: string[], required: string): boolean {
   if (userPermissions.includes(required)) return true;
+
+  // Fully dynamic matching based on module and action semantics
+  const normReq = required.toLowerCase().trim();
+  const [reqMod, reqAct] = normReq.split(':');
+
+  for (const perm of userPermissions) {
+    const normPerm = perm.toLowerCase().trim();
+    if (normPerm === normReq) return true;
+
+    const [pMod, pAct] = normPerm.split(':');
+    if (pMod && reqMod && pMod === reqMod) {
+      // Full module management wildcard
+      if (pAct === 'manage' || pAct === 'all' || !pAct) return true;
+      // Semantic equivalents: read <-> view, manage <-> create/edit/delete
+      if ((reqAct === 'read' && pAct === 'view') || (reqAct === 'view' && pAct === 'read')) return true;
+      if (reqAct === 'manage' && ['create', 'edit', 'delete'].includes(pAct)) return true;
+      if ((reqAct === 'assign' || reqAct === 'update_status') && pAct === 'edit') return true;
+      if (reqAct && pAct && reqAct.startsWith(pAct)) return true;
+    }
+  }
+
   const aliases = PERMISSION_ALIAS_MAP[required] ?? [];
   return aliases.some((a) => userPermissions.includes(a));
 }
@@ -63,7 +84,8 @@ export const requirePermission =
   (...requiredPermissions: string[]) =>
   async (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) return next(AppError.unauthorized());
-    if (req.user.role === 'admin') return next();
+    const role = (req.user.role || '').toLowerCase();
+    if (role === 'admin' || role === 'super_admin' || role === 'superadmin' || role === 'administrator' || role.includes('admin')) return next();
 
     try {
       const userPermissions = await resolveUserPermissions(req);
@@ -83,7 +105,8 @@ export const requireAnyPermission =
   (...permissions: string[]) =>
   async (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) return next(AppError.unauthorized());
-    if (req.user.role === 'admin') return next();
+    const role = (req.user.role || '').toLowerCase();
+    if (role === 'admin' || role === 'super_admin' || role === 'superadmin' || role === 'administrator' || role.includes('admin')) return next();
 
     try {
       const userPermissions = await resolveUserPermissions(req);

@@ -60,7 +60,9 @@ export const authService = {
       const roleRecord = await roleRepository.findById(user.roleId);
       if (roleRecord) {
         let expectedRole = user.role;
-        if (roleRecord.slug === 'admin' || roleRecord.slug === 'administrator') expectedRole = 'admin';
+        const slug = (roleRecord.slug || '').toLowerCase();
+        const name = (roleRecord.name || '').toLowerCase();
+        if (slug === 'admin' || slug === 'super_admin' || slug === 'superadmin' || slug === 'administrator' || slug.includes('admin') || name.includes('admin')) expectedRole = 'admin';
         else if (roleRecord.slug === 'manager' || roleRecord.name?.toLowerCase().includes('manager')) expectedRole = 'manager';
         else if (roleRecord.slug === 'agent') expectedRole = 'agent';
 
@@ -83,7 +85,9 @@ export const authService = {
       const roleRecord = await roleRepository.findById(user.roleId);
       if (roleRecord) {
         let expectedRole = user.role;
-        if (roleRecord.slug === 'admin' || roleRecord.slug === 'administrator') expectedRole = 'admin';
+        const slug = (roleRecord.slug || '').toLowerCase();
+        const name = (roleRecord.name || '').toLowerCase();
+        if (slug === 'admin' || slug === 'super_admin' || slug === 'superadmin' || slug === 'administrator' || slug.includes('admin') || name.includes('admin')) expectedRole = 'admin';
         else if (roleRecord.slug === 'manager' || roleRecord.name?.toLowerCase().includes('manager')) expectedRole = 'manager';
         else if (roleRecord.slug === 'agent') expectedRole = 'agent';
 
